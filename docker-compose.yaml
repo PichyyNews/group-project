@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # 1. Database Service (PostgreSQL)
+  s2_db:
+    image: postgres:15-alpine
+    container_name: s2_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - secure_internal
+    # 🔒 Security: ไม่เปิด Port 54324 ทิ้งไว้ให้คนนอกเชื่อมต่อ
+    # (No ports section)
+
+  # 2. Database Admin Service (PgAdmin4)
+  s2_admin:
+    image: dpage/pgadmin4
+    container_name: s2_admin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "8090:80"
+    depends_on:
+      - s2_db
+    networks:
+      - secure_internal
+
+  # 3. Application Service (Strapi)
+  s2_app:
+    image: prawee/strapi
+    container_name: s2_app
+    restart: unless-stopped
+    environment:
+      DATABASE_CLIENT: postgres
+      # 🔒 Security: เปลี่ยนจากการอ้อมไปใช้ host.docker.internal (เครื่องหลัก) 
+      # มาเป็นการชี้ไปยังชื่อ Service (s2_db) และใช้ Port มาตรฐาน (5432) ที่เชื่อมกันในเน็ตเวิร์กจำลองภายใน
+      DATABASE_HOST: s2_db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB}
+      DATABASE_USERNAME: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "8080:1337"
+    depends_on:
+      - s2_db
+    networks:
+      - secure_internal
+
+# จองพื้นที่สำหรับเก็บข้อมูลฐานข้อมูล เพื่อไม่ให้ข้อมูลหายตอนปิด Container
+volumes:
+  db_data:
+
+# 🔒 Security: เน็ตเวิร์กวงปิดสำหรับให้ทั้ง 3 Container คุยกันเองเท่านั้น
+networks:
+  secure_internal:
+    driver: bridge
